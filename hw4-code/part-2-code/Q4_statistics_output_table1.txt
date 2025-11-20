@@ -1,0 +1,107 @@
+/scratch/bds9746/.conda/envs/hw4-part-2-nlp/lib/python3.10/site-packages/huggingface_hub/file_download.py:942: FutureWarning: `resume_download` is deprecated and will be removed in version 1.0.0. Downloads always resume when possible. If you want to force a new download, use `force_download=True`.
+  warnings.warn(
+Loading T5 tokenizer...
+================================================================================
+Q4: Data Statistics
+================================================================================
+
+Loading data files...
+Train: 4225 examples
+Dev: 466 examples
+
+================================================================================
+Computing Table 1: Statistics BEFORE Preprocessing
+================================================================================
+
+Computing train statistics (BEFORE preprocessing)...
+[BEFORE TRAIN] Processing 4225 examples...
+[BEFORE TRAIN]   Processed 500/4225 examples...
+[BEFORE TRAIN]   Processed 1000/4225 examples...
+[BEFORE TRAIN]   Processed 1500/4225 examples...
+[BEFORE TRAIN]   Processed 2000/4225 examples...
+[BEFORE TRAIN]   Processed 2500/4225 examples...
+[BEFORE TRAIN]   Processed 3000/4225 examples...
+[BEFORE TRAIN]   Processed 3500/4225 examples...
+[BEFORE TRAIN]   Processed 4000/4225 examples...
+
+Computing dev statistics (BEFORE preprocessing)...
+[BEFORE DEV] Processing 466 examples...
+
+================================================================================
+Table 1: Data Statistics BEFORE Preprocessing
+================================================================================
+
+Statistics Name                               Train                Dev                 
+-------------------------------------------------------------------------------------
+Number of examples                            4225                 466                 
+Mean sentence length                          18.10                18.07               
+Mean SQL query length                         217.37               211.05              
+Vocabulary size (natural language)            792                  466                 
+Vocabulary size (SQL)                         556                  396                 
+
+================================================================================
+Computing Table 2: Statistics AFTER Preprocessing
+================================================================================
+
+Applying preprocessing...
+
+Computing train statistics (AFTER preprocessing)...
+[AFTER TRAIN] Processing 4225 examples...
+[AFTER TRAIN]   Processed 500/4225 examples...
+[AFTER TRAIN]   Processed 1000/4225 examples...
+[AFTER TRAIN]   Processed 1500/4225 examples...
+[AFTER TRAIN]   Processed 2000/4225 examples...
+[AFTER TRAIN]   Processed 2500/4225 examples...
+[AFTER TRAIN]   Processed 3000/4225 examples...
+[AFTER TRAIN]   Processed 3500/4225 examples...
+[AFTER TRAIN]   Processed 4000/4225 examples...
+
+Computing dev statistics (AFTER preprocessing)...
+[AFTER DEV] Processing 466 examples...
+
+================================================================================
+Table 2: Data Statistics AFTER Preprocessing
+================================================================================
+
+Statistics Name                               Train                Dev                 
+-------------------------------------------------------------------------------------
+Model name                                    google-t5/t5-small   google-t5/t5-small  
+Mean sentence length                          18.10                18.07               
+Mean SQL query length                         217.37               211.05              
+Vocabulary size (natural language)            792                  466                 
+Vocabulary size (SQL)                         556                  396                 
+
+================================================================================
+Summary of Preprocessing Impact
+================================================================================
+
+Metric                                             Before          After           Change         
+-----------------------------------------------------------------------------------------------
+Train mean NL length                               18.10           18.10           +0.00
+Train mean SQL length                              217.37          217.37          +0.00
+Train NL vocab size                                792             792             +0
+Train SQL vocab size                               556             556             +0
+Dev mean NL length                                 18.07           18.07           +0.00
+Dev mean SQL length                                211.05          211.05          +0.00
+
+================================================================================
+Additional Statistics (Useful for Training)
+================================================================================
+
+Max NL length (train): 60 tokens
+Max SQL length (train): 511 tokens
+Max NL length (dev): 44 tokens
+Max SQL length (dev): 503 tokens
+
+Recommendation: Set max_length >= 511 for SQL generation
+
+================================================================================
+Statistics computation complete!
+================================================================================
+
+Next Steps:
+1. Copy Table 1 numbers to your LaTeX report
+2. WARNING: Table 2 shows no preprocessing applied yet
+   - Implement T5Dataset.process_data() in load_data.py
+   - Update preprocess_data() function in this script to match
+   - Re-run this script to get updated Table 2

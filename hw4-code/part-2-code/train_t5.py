@@ -26,6 +26,9 @@ def get_args():
     parser.add_argument('--train_from_scratch', action='store_true',
                         help="Train from scratch instead of fine-tuning (default: fine-tune)")
     
+    parser.add_argument('--freeze_encoder', action='store_true',
+                        help="Freeze encoder parameters during fine-tuning")
+    
     # Training hyperparameters
     parser.add_argument('--optimizer_type', type=str, default="AdamW", 
                         choices=["AdamW"],
@@ -63,7 +66,7 @@ def get_args():
     # Generation parameters
     parser.add_argument('--max_gen_length', type=int, default=512,
                         help="Maximum length for generated SQL queries. Default: 512")
-    parser.add_argument('--num_beams', type=int, default=5,
+    parser.add_argument('--num_beams', type=int, default=10,
                         help="Number of beams for beam search (1 = greedy). Default: 10")
 
     args = parser.parse_args()
@@ -104,40 +107,45 @@ def train(args, model, train_loader, dev_loader, optimizer, scheduler):
         tr_loss = train_epoch(args, model, train_loader, optimizer, scheduler)
         print(f"Train loss: {tr_loss:.4f}")
 
-        # Evaluation
-        eval_loss, record_f1, record_em, sql_em, error_rate = eval_epoch(
-            args, model, dev_loader, gt_sql_path, model_sql_path,
-            gt_record_path, model_record_path
-        )
-        
-        print(f"Dev loss: {eval_loss:.4f}")
-        print(f"Dev Record F1: {record_f1:.4f}")
-        print(f"Dev Record EM: {record_em:.4f}")
-        print(f"Dev SQL EM: {sql_em:.4f}")
-        print(f"SQL Error Rate: {error_rate*100:.2f}%")
+        # Evaluation - only run after epoch 10 (i.e. starting from epoch index 9)
+        if (epoch-1 )%5== 0:
+            eval_loss, record_f1, record_em, sql_em, error_rate = eval_epoch(
+                args, model, dev_loader, gt_sql_path, model_sql_path,
+                gt_record_path, model_record_path
+            )
+            
+            print(f"Dev loss: {eval_loss:.4f}")
+            print(f"Dev Record F1: {record_f1:.4f}")
+            print(f"Dev Record EM: {record_em:.4f}")
+            print(f"Dev SQL EM: {sql_em:.4f}")
+            print(f"SQL Error Rate: {error_rate*100:.2f}%")
 
-        # Log to wandb if enabled
-        if args.use_wandb:
-            result_dict = {
-                'epoch': epoch,
-                'train/loss': tr_loss,
-                'dev/loss': eval_loss,
-                'dev/record_f1': record_f1,
-                'dev/record_em': record_em,
-                'dev/sql_em': sql_em,
-                'dev/error_rate': error_rate,
-            }
-            wandb.log(result_dict, step=epoch)
+            # Log to wandb if enabled
+            if args.use_wandb:
+                result_dict = {
+                    'epoch': epoch,
+                    'train/loss': tr_loss,
+                    'dev/loss': eval_loss,
+                    'dev/record_f1': record_f1,
+                    'dev/record_em': record_em,
+                    'dev/sql_em': sql_em,
+                    'dev/error_rate': error_rate,
+                }
+                wandb.log(result_dict, step=epoch)
 
-        # Early stopping logic
-        if record_f1 > best_f1:
-            best_f1 = record_f1
-            epochs_since_improvement = 0
-            print(f"New best F1: {best_f1:.4f} - Saving model")
-            save_model(checkpoint_dir, model, best=True)
+            # Early stopping logic
+            if record_f1 > best_f1:
+                best_f1 = record_f1
+                epochs_since_improvement = 0
+                print(f"New best F1: {best_f1:.4f} - Saving model")
+                save_model(checkpoint_dir, model, best=True)
+            else:
+                epochs_since_improvement += 1
+                print(f"No improvement for {epochs_since_improvement} epoch(s)")
         else:
-            epochs_since_improvement += 1
-            print(f"No improvement for {epochs_since_improvement} epoch(s)")
+            print("Skipping evaluation (waiting for epoch 10)")
+            if args.use_wandb:
+                 wandb.log({'epoch': epoch, 'train/loss': tr_loss}, step=epoch)
 
         # Always save last model
         save_model(checkpoint_dir, model, best=False)

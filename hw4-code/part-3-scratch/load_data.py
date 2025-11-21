@@ -10,13 +10,13 @@ import nltk
 nltk.download('punkt', quiet=True)
 from transformers import T5TokenizerFast
 import torch
-from prompting_utils import read_schema, load_alignment, ExampleRetriever
+from prompting_utils import read_schema, load_alignment
 
 PAD_IDX = 0
 
 class T5Dataset(Dataset):
 
-    def __init__(self, data_folder, split):
+    def __init__(self, data_folder, split, tokenizer=None):
         '''
         Skeleton for the class for performing data processing for the T5 model.
 
@@ -28,7 +28,10 @@ class T5Dataset(Dataset):
             * Class behavior should be different on the test set.
         '''
         self.split = split
-        self.tokenizer = T5TokenizerFast.from_pretrained('google-t5/t5-small')
+        if tokenizer:
+            self.tokenizer = tokenizer
+        else:
+            self.tokenizer = T5TokenizerFast.from_pretrained('google-t5/t5-small')
         
         # Load schema and alignment data
         schema_path = os.path.join(data_folder, 'flight_database.schema')
@@ -36,16 +39,6 @@ class T5Dataset(Dataset):
         
         alignment_path = os.path.join(data_folder, 'alignment.txt')
         self.alignment = load_alignment(alignment_path)
-        
-        # Initialize Retriever
-        train_nl_path = os.path.join(data_folder, 'train.nl')
-        train_sql_path = os.path.join(data_folder, 'train.sql')
-        with open(train_nl_path, 'r') as f:
-            train_nl = [line.strip() for line in f]
-        with open(train_sql_path, 'r') as f:
-            train_sql = [line.strip() for line in f]
-        
-        self.retriever = ExampleRetriever(train_nl, train_sql)
         
         # Process the data
         self.data = self.process_data(data_folder, split, self.tokenizer)
@@ -77,16 +70,6 @@ class T5Dataset(Dataset):
             # Preprocessing: Add task prefix (helps T5 understand the task)
             # This is a common practice for T5 models
             
-            # Retrieve 2 similar examples
-            examples = self.retriever.retrieve(nl, k=2)
-            # examples = [] # DISABLE FEW-SHOT FOR BASELINE
-            few_shot_str = ""
-            if examples:
-                few_shot_list = []
-                for ex_q, ex_sql in examples:
-                    few_shot_list.append(f"Q:{ex_q}->S:{ex_sql}")
-                few_shot_str = " | Examples: " + " ".join(few_shot_list)
-
             # Augment with Evidence from alignment
             evidence = []
             nl_lower = nl.lower()
@@ -96,13 +79,11 @@ class T5Dataset(Dataset):
             
             evidence_str = " | ".join(evidence)
             
-            # Construct input string: Query | Evidence | Examples | Schema
-            # Query first to avoid truncation
+            # Construct input string: Query | Evidence | Schema
+            # We put Query first to avoid truncation of the most important part
             input_text = f"translate to SQL: {nl}"
             if evidence_str:
                 input_text += f" | Evidence: {evidence_str}"
-            
-            input_text += few_shot_str
             input_text += f" | Schema: {self.schema_str}"
             
             # Tokenize natural language input (for encoder)
@@ -252,19 +233,20 @@ def test_collate_fn(batch):
     return encoder_ids, encoder_mask, initial_decoder_inputs
 
 
-def get_dataloader(batch_size, split):
+def get_dataloader(batch_size, split, tokenizer=None):
     '''
     Create a DataLoader for the specified split.
     
     Args:
         batch_size: Batch size for the dataloader
         split: One of 'train', 'dev', or 'test'
+        tokenizer: Optional custom tokenizer
     
     Returns:
         DataLoader object
     '''
     data_folder = 'data'
-    dset = T5Dataset(data_folder, split)
+    dset = T5Dataset(data_folder, split, tokenizer=tokenizer)
     shuffle = split == "train"  # Only shuffle training data
     collate_fn = normal_collate_fn if split != "test" else test_collate_fn
 
@@ -272,20 +254,21 @@ def get_dataloader(batch_size, split):
     return dataloader
 
 
-def load_t5_data(batch_size, test_batch_size):
+def load_t5_data(batch_size, test_batch_size, tokenizer=None):
     '''
     Load all three dataloaders.
     
     Args:
         batch_size: Batch size for training
         test_batch_size: Batch size for dev/test
+        tokenizer: Optional custom tokenizer
     
     Returns:
         train_loader, dev_loader, test_loader
     '''
-    train_loader = get_dataloader(batch_size, "train")
-    dev_loader = get_dataloader(test_batch_size, "dev")
-    test_loader = get_dataloader(test_batch_size, "test")
+    train_loader = get_dataloader(batch_size, "train", tokenizer)
+    dev_loader = get_dataloader(test_batch_size, "dev", tokenizer)
+    test_loader = get_dataloader(test_batch_size, "test", tokenizer)
     
     return train_loader, dev_loader, test_loader
 

@@ -43,11 +43,10 @@ def initialize_model(args):
         print("Loading pretrained T5-small model for fine-tuning...")
         model = T5ForConditionalGeneration.from_pretrained('google-t5/t5-small')
         
-        # Optional: Freeze encoder layers (uncomment if you want to try this)
-        # This can speed up training and prevent overfitting on small datasets
-        # for param in model.encoder.parameters():
-        #     param.requires_grad = False
-        # print("Encoder frozen - only training decoder")
+        if hasattr(args, 'freeze_encoder') and args.freeze_encoder:
+             for param in model.encoder.parameters():
+                 param.requires_grad = False
+             print("Encoder frozen - only training decoder")
         
     else:
         print("Initializing T5-small model from scratch...")

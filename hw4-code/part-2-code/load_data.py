@@ -10,6 +10,7 @@ import nltk
 nltk.download('punkt', quiet=True)
 from transformers import T5TokenizerFast
 import torch
+from prompting_utils import read_schema, load_alignment, ExampleRetriever
 
 PAD_IDX = 0
 
@@ -26,9 +27,25 @@ class T5Dataset(Dataset):
               T5Tokenizer should serve that purpose.
             * Class behavior should be different on the test set.
         '''
-        # TODO: Implement this
         self.split = split
         self.tokenizer = T5TokenizerFast.from_pretrained('google-t5/t5-small')
+        
+        # Load schema and alignment data
+        schema_path = os.path.join(data_folder, 'flight_database.schema')
+        self.schema_str = read_schema(schema_path)
+        
+        alignment_path = os.path.join(data_folder, 'alignment.txt')
+        self.alignment = load_alignment(alignment_path)
+        
+        # Initialize Retriever
+        train_nl_path = os.path.join(data_folder, 'train.nl')
+        train_sql_path = os.path.join(data_folder, 'train.sql')
+        with open(train_nl_path, 'r') as f:
+            train_nl = [line.strip() for line in f]
+        with open(train_sql_path, 'r') as f:
+            train_sql = [line.strip() for line in f]
+        
+        self.retriever = ExampleRetriever(train_nl, train_sql)
         
         # Process the data
         self.data = self.process_data(data_folder, split, self.tokenizer)
@@ -59,14 +76,41 @@ class T5Dataset(Dataset):
         for nl, sql in zip(nl_lines, sql_lines):
             # Preprocessing: Add task prefix (helps T5 understand the task)
             # This is a common practice for T5 models
-            nl_processed = f"translate to SQL: {nl}"
+            
+            # Retrieve 2 similar examples
+            examples = self.retriever.retrieve(nl, k=2)
+            # examples = [] # DISABLE FEW-SHOT FOR BASELINE
+            few_shot_str = ""
+            if examples:
+                few_shot_list = []
+                for ex_q, ex_sql in examples:
+                    few_shot_list.append(f"Q:{ex_q}->S:{ex_sql}")
+                few_shot_str = " | Examples: " + " ".join(few_shot_list)
+
+            # Augment with Evidence from alignment
+            evidence = []
+            nl_lower = nl.lower()
+            for phrase, db_val in self.alignment.items():
+                if phrase in nl_lower:
+                    evidence.append(f"{phrase} -> {db_val}")
+            
+            evidence_str = " | ".join(evidence)
+            
+            # Construct input string: Query | Evidence | Examples | Schema
+            # Query first to avoid truncation
+            input_text = f"translate to SQL: {nl}"
+            if evidence_str:
+                input_text += f" | Evidence: {evidence_str}"
+            
+            input_text += few_shot_str
+            input_text += f" | Schema: {self.schema_str}"
             
             # Tokenize natural language input (for encoder)
             encoder_input = tokenizer.encode(
-                nl_processed,
+                input_text,
                 add_special_tokens=True,
                 truncation=True,
-                max_length=512  # T5-small can handle up to 512 tokens
+                max_length=1024  # Increased to 1024 to accommodate schema
             )
             
             # Tokenize SQL output (for decoder) - only if available

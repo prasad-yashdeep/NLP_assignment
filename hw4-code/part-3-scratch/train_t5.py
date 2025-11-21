@@ -35,34 +35,34 @@ def get_args():
                         help="Use custom SQL-aware tokenization")
     
     # Optimized hyperparameters for long from-scratch training
-    parser.add_argument('--learning_rate', type=float, default=5e-4,
+    parser.add_argument('--learning_rate', type=float, default=1e-4,
                         help="Lower LR for stable long training")
     parser.add_argument('--weight_decay', type=float, default=0.01)
-    parser.add_argument('--grad_clip', type=float, default=0.5,
+    parser.add_argument('--grad_clip', type=float, default=1.0,
                         help="Conservative gradient clipping")
-    parser.add_argument('--gradient_accumulation_steps', type=int, default=8,
+    parser.add_argument('--gradient_accumulation_steps', type=int, default=16,
                         help="Large effective batch size")
     
     parser.add_argument('--scheduler_type', type=str, default="cosine")
-    parser.add_argument('--num_warmup_epochs', type=int, default=5,
+    parser.add_argument('--num_warmup_epochs', type=int, default=10,
                         help="Long warmup for from-scratch")
-    parser.add_argument('--max_n_epochs', type=int, default=25,
+    parser.add_argument('--max_n_epochs', type=int, default=100,
                         help="Long training for from-scratch")
-    parser.add_argument('--patience_epochs', type=int, default=5,
+    parser.add_argument('--patience_epochs', type=int, default=20,
                         help="Very patient for slow from-scratch learning")
     
     parser.add_argument('--experiment_name', type=str, default='extra_credit_long')
-    parser.add_argument('--batch_size', type=int, default=2,
+    parser.add_argument('--batch_size', type=int, default=4,
                         help="Small batch for memory efficiency")
     parser.add_argument('--test_batch_size', type=int, default=16)
-    
+
     # Generation parameters
     parser.add_argument('--max_gen_length', type=int, default=512)
-    parser.add_argument('--num_beams', type=int, default=10)  # Greedy for speed
-    
+    parser.add_argument('--num_beams', type=int, default=5)  # Beam search for better quality
+
     # Evaluation frequency (less frequent for speed and stability)
-    parser.add_argument('--eval_every_n_epochs', type=int, default=5,
-                        help="Evaluate every N epochs to save time and reduce interruptions")
+    parser.add_argument('--eval_every_n_epochs', type=int, default=2,
+                        help="Evaluate every N epochs to monitor progress")
     parser.add_argument('--save_every_n_epochs', type=int, default=10)
     
     # Add resume functionality
@@ -246,11 +246,12 @@ def main():
         # Save checkpoint periodically
         if epoch % args.save_every_n_epochs == 0:
             save_model(checkpoint_dir, model, best=False)
-            
-        # Early stopping (adjusted patience for 25-epoch eval frequency)
-        if patience >= 2:  # 2 evaluations * 25 epochs = 50 epochs without improvement
-            print(f"🛑 Early stopping - no improvement for {patience * args.eval_every_n_epochs} epochs")
-            break
+
+        # Early stopping logic - check after evaluations
+        if epoch % args.eval_every_n_epochs == 0 or epoch == args.max_n_epochs - 1:
+            if patience >= args.patience_epochs:  # patience_epochs in evaluation cycles
+                print(f"🛑 Early stopping - no improvement for {patience} evaluations ({patience * args.eval_every_n_epochs} epochs)")
+                break
     
     # Final test inference
     print(f"\n🧪 Generating final test predictions...")

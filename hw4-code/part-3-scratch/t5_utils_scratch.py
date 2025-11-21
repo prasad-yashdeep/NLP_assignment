@@ -50,7 +50,7 @@ class CustomSQLTokenizer:
         new_tokens = []
         
         # Add SQL keyword tokens
-        for keyword in self.sql_keywords:
+        for keyword in sorted(list(self.sql_keywords)):
             new_tokens.append(f"SQL_KW_{keyword}")
         
         # Add SQL operator tokens  
@@ -76,34 +76,34 @@ class CustomSQLTokenizer:
         """Preprocess text to use SQL-aware tokens"""
         if not self._contains_sql(text):
             return text
-        
+
         # Replace SQL keywords with special tokens
         for keyword in self.sql_keywords:
-            pattern = r'\\b' + re.escape(keyword) + r'\\b'
+            pattern = r'\b' + re.escape(keyword) + r'\b'
             replacement = f' SQL_KW_{keyword} '
             text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
-        
+
         # Replace SQL operators with special tokens
         for op, name in self.sql_operators.items():
             text = text.replace(op, f' SQL_OP_{name} ')
-        
+
         # Clean up whitespace
-        text = re.sub(r'\\s+', ' ', text).strip()
+        text = re.sub(r'\s+', ' ', text).strip()
         return text
     
     def postprocess_text(self, text):
         """Convert SQL tokens back to original form"""
         # Convert keywords back
         for keyword in self.sql_keywords:
-            text = text.replace(f'SQL_KW_{keyword}', keyword)
-        
+            text = text.replace(f'SQL_KW_{keyword}', f' {keyword} ')
+
         # Convert operators back
         for op, name in self.sql_operators.items():
-            text = text.replace(f'SQL_OP_{name}', op)
-        
+            text = text.replace(f'SQL_OP_{name}', f' {op} ')
+
         # Clean up spacing around operators
-        text = re.sub(r'\\s*([(),;.])\\s*', r'\\1', text)
-        text = re.sub(r'\\s+', ' ', text).strip()
+        text = re.sub(r'\s*([(),;.])\s*', r'\1', text)
+        text = re.sub(r'\s+', ' ', text).strip()
         return text
     
     def _contains_sql(self, text):
@@ -120,9 +120,18 @@ class CustomSQLTokenizer:
         """Decode with SQL postprocessing"""
         text = self.base_tokenizer.decode(token_ids, **kwargs)
         return self.postprocess_text(text)
-    
+
+    def __call__(self, text, **kwargs):
+        """Make tokenizer callable (needed for huggingface compatibility)"""
+        processed_text = self.preprocess_text(text) if isinstance(text, str) else [self.preprocess_text(t) for t in text]
+        return self.base_tokenizer(processed_text, **kwargs)
+
     def __len__(self):
         return len(self.base_tokenizer)
+
+    def __getattr__(self, name):
+        """Delegate unknown attributes to base tokenizer"""
+        return getattr(self.base_tokenizer, name)
 
 def initialize_model_from_scratch(args, tokenizer):
     """
